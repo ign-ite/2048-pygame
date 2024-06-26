@@ -4,7 +4,6 @@ import math
 import numpy as np
 import copy
 
-
 pygame.init()
 
 FPS = 60
@@ -115,106 +114,79 @@ def get_random_pos(tiles):
     return row, col
 
 
-def move_tiles(window, tiles, clock, direction):
-    updated = True
+def move_tiles(tiles, direction):
+    moved = False
     blocks = set()
 
     if direction == "left":
         sort_func = lambda x: x.col
         reverse = False
-        delta = (-MOVE_VEL, 0)
+        delta = (-1, 0)
         boundary_check = lambda tile: tile.col == 0
         get_next_tile = lambda tile: tiles.get(f"{tile.row}{tile.col - 1}")
-        merge_check = lambda tile, next_tile: tile.x > next_tile.x + MOVE_VEL
-        move_check = (
-            lambda tile, next_tile: tile.x > next_tile.x + RECT_WIDTH + MOVE_VEL
-        )
-        ceil = True
     elif direction == "right":
         sort_func = lambda x: x.col
         reverse = True
-        delta = (MOVE_VEL, 0)
+        delta = (1, 0)
         boundary_check = lambda tile: tile.col == COLS - 1
         get_next_tile = lambda tile: tiles.get(f"{tile.row}{tile.col + 1}")
-        merge_check = lambda tile, next_tile: tile.x < next_tile.x - MOVE_VEL
-        move_check = (
-            lambda tile, next_tile: tile.x + RECT_WIDTH + MOVE_VEL < next_tile.x
-        )
-        ceil = False
     elif direction == "up":
         sort_func = lambda x: x.row
         reverse = False
-        delta = (0, -MOVE_VEL)
+        delta = (0, -1)
         boundary_check = lambda tile: tile.row == 0
         get_next_tile = lambda tile: tiles.get(f"{tile.row - 1}{tile.col}")
-        merge_check = lambda tile, next_tile: tile.y > next_tile.y + MOVE_VEL
-        move_check = (
-            lambda tile, next_tile: tile.y > next_tile.y + RECT_HEIGHT + MOVE_VEL
-        )
-        ceil = True
     elif direction == "down":
         sort_func = lambda x: x.row
         reverse = True
-        delta = (0, MOVE_VEL)
+        delta = (0, 1)
         boundary_check = lambda tile: tile.row == ROWS - 1
         get_next_tile = lambda tile: tiles.get(f"{tile.row + 1}{tile.col}")
-        merge_check = lambda tile, next_tile: tile.y < next_tile.y - MOVE_VEL
-        move_check = (
-            lambda tile, next_tile: tile.y + RECT_HEIGHT + MOVE_VEL < next_tile.y
-        )
-        ceil = False
 
-    while updated:
-        clock.tick(FPS)
-        updated = False
-        sorted_tiles = sorted(tiles.values(), key=sort_func, reverse=reverse)
+    sorted_tiles = sorted(tiles.values(), key=sort_func, reverse=reverse)
 
-        for i, tile in enumerate(sorted_tiles):
-            if boundary_check(tile):
-                continue
+    for tile in sorted_tiles:
+        if boundary_check(tile):
+            continue
 
+        next_tile = get_next_tile(tile)
+        while next_tile and next_tile.value == 0:
+            tile.row += delta[1]
+            tile.col += delta[0]
             next_tile = get_next_tile(tile)
-            if not next_tile:
-                tile.move(delta)
-            elif (
-                tile.value == next_tile.value
-                and tile not in blocks
-                and next_tile not in blocks
-            ):
-                if merge_check(tile, next_tile):
-                    tile.move(delta)
-                else:
-                    next_tile.value *= 2
-                    sorted_tiles.pop(i)
-                    blocks.add(next_tile)
-            elif move_check(tile, next_tile):
-                tile.move(delta)
-            else:
-                continue
+            moved = True
 
-            tile.set_pos(ceil)
-            updated = True
+        if next_tile and next_tile.value == tile.value and next_tile not in blocks:
+            next_tile.value *= 2
+            tile.value = 0
+            blocks.add(next_tile)
+            moved = True
+        else:
+            tile.row -= delta[1]
+            tile.col -= delta[0]
 
-        update_tiles(window, tiles, sorted_tiles)
+    return moved
 
-    return end_move(tiles)
+
+def add_random_tile(tiles):
+    row, col = get_random_pos(tiles)
+    tiles[f"{row}{col}"] = Tile(random.choice([2, 4]), row, col)
 
 
 def end_move(tiles):
     if len(tiles) == 16:
         return "lost"
 
-    row, col = get_random_pos(tiles)
-    tiles[f"{row}{col}"] = Tile(random.choice([2, 4]), row, col)
+    add_random_tile(tiles)
     return "continue"
 
 
-def update_tiles(window, tiles, sorted_tiles):
-    tiles.clear()
-    for tile in sorted_tiles:
-        tiles[f"{tile.row}{tile.col}"] = tile
-
-    draw(window, tiles)
+def update_tiles(tiles):
+    updated_tiles = {}
+    for tile in tiles.values():
+        if tile.value != 0:
+            updated_tiles[f"{tile.row}{tile.col}"] = tile
+    return updated_tiles
 
 
 def generate_tiles():
@@ -226,15 +198,10 @@ def generate_tiles():
     return tiles
 
 
-def add_random_tile(tiles):
-    row, col = get_random_pos(tiles)
-    tiles[f"{row}{col}"] = Tile(random.choice([2, 4]), row, col)
-
-
 def simulate_move(tiles, direction):
     new_tiles = copy.deepcopy(tiles)
-    move_result = move_tiles(WINDOW, new_tiles, pygame.time.Clock(), direction)
-    if not move_result:
+    moved = move_tiles(new_tiles, direction)
+    if not moved:
         return tiles, 0
 
     new_tiles = update_tiles(new_tiles)
@@ -243,18 +210,17 @@ def simulate_move(tiles, direction):
     return new_tiles, score
 
 
-def monte_carlo_tree_search(tiles,iteration):
-    moves = ["left", "right", "up", "down"]
-    scores = {move: 0 for move in moves}
+def mcts(tiles, simulations=100):
+    directions = ["left", "right", "up", "down"]
+    scores = {direction: 0 for direction in directions}
 
-    for _ in range(iteration):
-        for move in moves:
-            simulated_tiles, result, score = simulate_move(tiles, move)
-            if result != "lost":
-                scores[move] += score
+    for direction in directions:
+        for _ in range(simulations):
+            new_tiles, score = simulate_move(tiles, direction)
+            scores[direction] += score
 
-    best_move = max(scores, key=scores.get)
-    return best_move
+    best_direction = max(scores, key=scores.get)
+    return best_direction
 
 
 def main(window):
@@ -271,18 +237,13 @@ def main(window):
                 run = False
                 break
 
-            # if event.type == pygame.KEYDOWN:
-            #     if event.key == pygame.K_LEFT:
-            #         move_tiles(window, tiles, clock, "left")
-            #     if event.key == pygame.K_RIGHT:
-            #         move_tiles(window, tiles, clock, "right")
-            #     if event.key == pygame.K_UP:
-            #         move_tiles(window, tiles, clock, "up")
-            #     if event.key == pygame.K_DOWN:
-            #         move_tiles(window, tiles, clock, "down")
-        best_move = monte_carlo_tree_search(tiles, 100)
-        move_tiles(window, tiles, clock, best_move)
+        # Use MCTS to determine the best move
+        best_move = mcts(tiles)
+        moved = move_tiles(tiles, best_move)
 
+        if moved:
+            tiles = update_tiles(tiles)
+            add_random_tile(tiles)
 
         draw(window, tiles)
 
