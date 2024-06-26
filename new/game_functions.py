@@ -1,35 +1,17 @@
 import numpy as np
 
-
 POSSIBLE_MOVES_COUNT = 4
 CELL_COUNT = 4
 NUMBER_OF_SQUARES = CELL_COUNT * CELL_COUNT
-NEW_TILE_DISTRIBUTION = np.array([2, 2, 2, 2, 2, 2, 2, 2, 2, 4]) #9 2's and 1 4's since in 2048, 90% --> 2 and 10% --> 1#
+NEW_TILE_DISTRIBUTION = np.array([2, 2, 2, 2, 2, 2, 2, 2, 2, 4])
 
 
 def initialize_game():
     board = np.zeros((NUMBER_OF_SQUARES), dtype="int")
-    initial_twos = np.random.default_rng().choice(NUMBER_OF_SQUARES, 2, replace=False) #it is returned as a numpy array
+    initial_twos = np.random.default_rng().choice(NUMBER_OF_SQUARES, 2, replace=False)
     board[initial_twos] = 2
     board = board.reshape((CELL_COUNT, CELL_COUNT))
     return board
-
-
-def check_for_win(board):
-    return 2048 in board
-
-
-def merge_elements(board):
-    score = 0
-    done = False
-    for row in range(CELL_COUNT):
-        for col in range(CELL_COUNT - 1, -1, -1):
-            if board[row][col] == board[row][col -1] and board[row][col] != 0:
-                board[row][col] *= 2
-                score += 1
-                done = True
-
-    return (board, done, score)
 
 
 def push_board_right(board):
@@ -39,12 +21,24 @@ def push_board_right(board):
         count = CELL_COUNT - 1
         for col in range(CELL_COUNT - 1, -1, -1):
             if board[row][col] != 0:
-                new[row][col] = board[row][col]
+                new[row][count] = board[row][col]
                 if col != count:
                     done = True
                 count -= 1
-
     return (new, done)
+
+
+def merge_elements(board):
+    score = 0
+    done = False
+    for row in range(CELL_COUNT):
+        for col in range(CELL_COUNT - 1, 0, -1):
+            if board[row][col] == board[row][col - 1] and board[row][col] != 0:
+                board[row][col] *= 2
+                score += board[row][col]
+                board[row][col - 1] = 0
+                done = True
+    return (board, done, score)
 
 
 def move_up(board):
@@ -114,3 +108,6 @@ def add_new_tile(board):
     board[tile_row_options[tile_loc], tile_col_options[tile_loc]] = tile_value
     return board
 
+
+def check_for_win(board):
+    return 2048 in board

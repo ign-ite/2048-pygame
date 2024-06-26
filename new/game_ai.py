@@ -43,7 +43,6 @@ def ai_move(board, searches_per_move, search_length):
                     move_number += 1
     best_move_index = np.argmax(first_move_scores)
     best_move = possible_first_moves[best_move_index]
-    # Hacemos print para ver en consola que está ocurriendo, ya que el GUI no pinta
     print(board)
     print(best_move)
     search_board, game_valid, score = best_move(board)
